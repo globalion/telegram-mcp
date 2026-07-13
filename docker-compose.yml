@@ -1,0 +1,42 @@
+# telegram-mcp deployment stack.
+#
+# Container names are prefixed with `telegram-mcp-` per Globalion's shared-
+# server rule (unique container name per MCP). Host port 3012 is the internal
+# fallback for direct debugging — external traffic reaches this via the
+# Cloudflare tunnel pointing at http://telegram-mcp-web:3000 on the shared
+# platform network.
+
+services:
+  db:
+    container_name: telegram-mcp-db
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: telegram_mcp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d telegram_mcp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    container_name: telegram-mcp-web
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://admin:admin@db:5432/telegram_mcp
+    ports:
+      - "3012:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

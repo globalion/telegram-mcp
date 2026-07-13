@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- NextAuth models ---
+// Google sign-in only, JWT sessions. We don't request Gmail or any other
+// scope — the Google account is purely identity.
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+
+  accounts     Account[]
+  sessions     Session[]
+  apiKeys      ApiKey[]
+  telegram     TelegramLink?
+  messages     Message[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- MCP API keys ---
+// Raw key format: `tg_live_<48 hex>`. SHA-256 hash stored; raw shown once.
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  keyHash    String    @unique
+  keyPrefix  String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// --- Telegram link ---
+// One row per user who's connected a bot. `webhookSecret` is a per-user
+// random URL segment so a leaked bot token can't be pointed at someone
+// else's account. `chatId` is filled the first time the user DMs their bot.
+
+model TelegramLink {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  botToken      String
+  botUsername   String?
+  webhookSecret String   @unique
+  chatId        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([chatId])
+}
+
+// --- Conversation history ---
+// Every message in and out of every user's bot is logged here so:
+//   (a) the LLM has memory across turns,
+//   (b) MCP clients can list_recent_messages,
+//   (c) the user can review what their bot has said.
+// `role` follows the OpenAI convention: "user" | "assistant" | "system".
+
+model Message {
+  id        String   @id @default(cuid())
+  userId    String
+  role      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
