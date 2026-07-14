@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { auth } from "@/lib/auth";
-import { SignInButton } from "./signin-button";
+import { auth, enabledProviders } from "@/lib/auth";
+import { SignInButtons } from "./signin-button";
 
 const CONFIG_SNIPPET = `{
   "mcpServers": {
@@ -32,24 +32,35 @@ export default async function LandingPage() {
           Your agent brings the brain — we just move messages, store history,
           and expose slash-commands. No LLM in our stack, no vendor lock-in.
         </p>
-        <div className="mt-8 flex gap-3">
+        <div className="mt-8">
           {signedIn ? (
-            <Link
-              href="/dashboard"
-              className="rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-semibold text-black hover:bg-teal-400"
-            >
-              Open dashboard →
-            </Link>
+            <div className="flex gap-3">
+              <Link
+                href="/dashboard"
+                className="rounded-lg bg-teal-500 px-5 py-2.5 text-sm font-semibold text-black hover:bg-teal-400"
+              >
+                Open dashboard →
+              </Link>
+              <Link
+                href="https://github.com/globalion/telegram-mcp"
+                target="_blank"
+                className="rounded-lg border border-neutral-700 bg-neutral-900 px-5 py-2.5 text-sm text-neutral-200 hover:bg-neutral-800"
+              >
+                GitHub ↗
+              </Link>
+            </div>
           ) : (
-            <SignInButton />
+            <div className="max-w-sm">
+              <SignInButtons providers={enabledProviders} />
+              <Link
+                href="https://github.com/globalion/telegram-mcp"
+                target="_blank"
+                className="mt-2 block text-center text-xs text-neutral-500 underline hover:text-neutral-300"
+              >
+                View on GitHub ↗
+              </Link>
+            </div>
           )}
-          <Link
-            href="https://github.com/globalion/telegram-mcp"
-            target="_blank"
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-5 py-2.5 text-sm text-neutral-200 hover:bg-neutral-800"
-          >
-            GitHub ↗
-          </Link>
         </div>
       </div>
 
@@ -73,7 +84,7 @@ export default async function LandingPage() {
           Setup
         </h2>
         <ol className="space-y-2 text-neutral-300">
-          <li>1. Sign in with Google (identity + ban anchor).</li>
+          <li>1. Sign in with Google, GitHub, Facebook, or Microsoft.</li>
           <li>2. Create a bot via <a href="https://t.me/BotFather" target="_blank" className="text-teal-300 underline">@BotFather</a>, paste the token in your dashboard.</li>
           <li>3. Copy the MCP API key and paste this into your agent&apos;s config:</li>
         </ol>
@@ -109,7 +120,7 @@ export default async function LandingPage() {
           <li>• <code className="rounded bg-neutral-800 px-1.5 py-0.5 text-teal-300">/recent [N]</code> — show last N messages</li>
           <li>• <code className="rounded bg-neutral-800 px-1.5 py-0.5 text-teal-300">/clear</code> — wipe history</li>
           <li>• <code className="rounded bg-neutral-800 px-1.5 py-0.5 text-teal-300">/window N</code> — set history window size (default 20)</li>
-          <li>• <code className="rounded bg-neutral-800 px-1.5 py-0.5 text-teal-300">/usage</code> — stored message count</li>
+          <li>• <code className="rounded bg-neutral-800 px-1.5 py-0.5 text-teal-300">/usage</code> — storage + message count (10 MB cap per user)</li>
         </ul>
       </section>
 

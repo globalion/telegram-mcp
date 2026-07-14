@@ -8,8 +8,6 @@ datasource db {
 }
 
 // --- NextAuth models ---
-// Google sign-in is only the ban anchor / API-key-issuing gate. Per-message
-// identity comes from the API key + chatId, never the login session.
 
 model User {
   id            String    @id @default(cuid())
@@ -61,9 +59,6 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// --- MCP API keys ---
-// Raw key format: `tg_live_<48 hex>`. SHA-256 hash stored; raw shown once.
-
 model ApiKey {
   id         String    @id @default(cuid())
   userId     String
@@ -79,35 +74,28 @@ model ApiKey {
 }
 
 // --- Telegram link ---
-// One row per user who's connected a bot. webhookSecret is a per-user
-// random URL segment. chatId is filled the first time the user DMs /start.
-// lastPulledAt is the cursor for get_new_messages — messages with role=user
-// created after this timestamp are "unread". windowSize governs how many
-// messages /recent and list_recent_messages surface by default.
+// storageBytes is a running total of message content stored for this user.
+// When it crosses 8 MB we warn once (warnSentAt is set); at 10 MB we reject
+// new inbound messages with a Telegram notice until the user runs /clear.
 
 model TelegramLink {
-  id            String   @id @default(cuid())
-  userId        String   @unique
+  id            String    @id @default(cuid())
+  userId        String    @unique
   botToken      String
   botUsername   String?
-  webhookSecret String   @unique
+  webhookSecret String    @unique
   chatId        String?
-  lastPulledAt  DateTime @default(now())
-  windowSize    Int      @default(20)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  lastPulledAt  DateTime  @default(now())
+  windowSize    Int       @default(20)
+  storageBytes  Int       @default(0)
+  warnSentAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([chatId])
 }
-
-// --- Conversation history ---
-// Every message in and out is logged. "role" follows OpenAI convention:
-//   "user"      — inbound from the human on Telegram
-//   "assistant" — outbound to Telegram (either from the agent via
-//                 send_telegram_message, or from the platform itself
-//                 replying to a slash-command).
 
 model Message {
   id        String   @id @default(cuid())

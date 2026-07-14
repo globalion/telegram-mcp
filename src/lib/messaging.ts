@@ -1,13 +1,13 @@
 // Message transport for the Telegram ⇆ agent bridge.
 //
 // Design: our platform is a pipe + storage. It never generates replies.
-// - Inbound (Telegram → agent): the webhook stores the message; the user's
-//   agent calls get_new_messages via MCP to pull unread items.
-// - Outbound (agent → Telegram): the agent calls send_telegram_message; we
-//   deliver via the Bot API and log the message so future list_recent_messages
-//   sees it.
+// - Inbound: webhook stores; agent calls get_new_messages to pull.
+// - Outbound: agent calls send_telegram_message; we deliver + log.
 //
-// See CLAUDE.md / redesign spec §2 for the mental model.
+// Storage quota (Pawan spec §5.5): 10 MB hard cap per user, 8 MB warning.
+// Both directions count against the cap. Enforced at insert time — see
+// `checkAndReserveStorage()`. /clear (webhook) resets `storageBytes` and
+// `warnSentAt` so a fresh session gets a fresh warning if it refills.
 
 import { prisma } from "./db";
 import { sendMessage } from "./telegram";
@@ -19,12 +19,74 @@ export interface StoredMessage {
   createdAt: Date;
 }
 
-export async function storeInboundMessage(userId: string, text: string): Promise<void> {
-  await prisma.message.create({
-    data: { userId, role: "user", content: text },
+export const STORAGE_LIMIT_BYTES = 10 * 1024 * 1024;
+export const STORAGE_WARN_BYTES = 8 * 1024 * 1024;
+
+function byteLength(text: string): number {
+  return Buffer.byteLength(text, "utf-8");
+}
+
+/**
+ * Bumps storageBytes by `bytes` if it fits under the 10 MB cap. Returns:
+ *   { ok: true, warn: boolean }  — reserved; caller should proceed and warn
+ *                                    on Telegram if `warn` is true.
+ *   { ok: false }                — over cap; caller must reject with a
+ *                                    Telegram notice, not store the message.
+ */
+async function reserveStorage(
+  userId: string,
+  bytes: number,
+): Promise<{ ok: true; warn: boolean } | { ok: false; used: number }> {
+  const link = await prisma.telegramLink.findUnique({ where: { userId } });
+  if (!link) return { ok: false, used: 0 };
+  const newTotal = link.storageBytes + bytes;
+  if (newTotal > STORAGE_LIMIT_BYTES) {
+    return { ok: false, used: link.storageBytes };
+  }
+  const crossedWarn = newTotal >= STORAGE_WARN_BYTES && !link.warnSentAt;
+  await prisma.telegramLink.update({
+    where: { id: link.id },
+    data: {
+      storageBytes: newTotal,
+      warnSentAt: crossedWarn ? new Date() : link.warnSentAt,
+    },
+  });
+  return { ok: true, warn: crossedWarn };
+}
+
+async function releaseAllStorage(userId: string): Promise<void> {
+  await prisma.telegramLink.updateMany({
+    where: { userId },
+    data: { storageBytes: 0, warnSentAt: null },
   });
 }
 
+/**
+ * Store inbound Telegram message from the user. Returns null on success,
+ * an error string if the message was rejected (quota exceeded). Caller
+ * (webhook) should surface the error back on Telegram.
+ */
+export async function storeInboundMessage(
+  userId: string,
+  text: string,
+): Promise<{ ok: true; warn: boolean } | { ok: false; reason: string; used: number }> {
+  const bytes = byteLength(text);
+  const reserved = await reserveStorage(userId, bytes);
+  if (!reserved.ok) {
+    return {
+      ok: false,
+      reason: `Storage limit reached (${(STORAGE_LIMIT_BYTES / 1024 / 1024).toFixed(0)} MB). Run /clear to wipe history and free space.`,
+      used: reserved.used,
+    };
+  }
+  await prisma.message.create({
+    data: { userId, role: "user", content: text },
+  });
+  return { ok: true, warn: reserved.warn };
+}
+
+/** Store a platform-generated reply (e.g. /help response). Does NOT count
+ *  against quota — these are our own, tiny, and users can't spam them. */
 export async function storePlatformReply(userId: string, text: string): Promise<void> {
   await prisma.message.create({
     data: { userId, role: "assistant", content: text },
@@ -32,8 +94,8 @@ export async function storePlatformReply(userId: string, text: string): Promise<
 }
 
 /**
- * agent → user. Pushes text into the user's Telegram bot and logs it.
- * Called via MCP tool send_telegram_message.
+ * agent → user. Delivers a message via Telegram and logs it. Counts against
+ * the user's quota (the agent could stream large replies otherwise).
  */
 export async function pushAssistantMessage(userId: string, text: string): Promise<void> {
   const link = await prisma.telegramLink.findUnique({ where: { userId } });
@@ -43,17 +105,26 @@ export async function pushAssistantMessage(userId: string, text: string): Promis
       "The user's bot exists but they haven't sent /start yet, so we don't know their chat id.",
     );
   }
+  const bytes = byteLength(text);
+  const reserved = await reserveStorage(userId, bytes);
+  if (!reserved.ok) {
+    throw new Error(
+      `User is at storage limit (${(STORAGE_LIMIT_BYTES / 1024 / 1024).toFixed(0)} MB). Ask them to run /clear.`,
+    );
+  }
   await sendMessage(link.botToken, link.chatId, text);
   await prisma.message.create({
     data: { userId, role: "assistant", content: text },
   });
+  if (reserved.warn) {
+    await sendMessage(
+      link.botToken,
+      link.chatId,
+      `⚠ You're using over ${(STORAGE_WARN_BYTES / 1024 / 1024).toFixed(0)} MB of storage. New content is blocked at ${(STORAGE_LIMIT_BYTES / 1024 / 1024).toFixed(0)} MB. Run /clear to free space.`,
+    ).catch(() => undefined);
+  }
 }
 
-/**
- * The receive half. Returns messages with role=user that arrived AFTER the
- * caller's last pull cursor, then advances the cursor to now so those same
- * messages won't come back next call. Read-once semantics.
- */
 export async function getNewMessages(userId: string): Promise<StoredMessage[]> {
   const link = await prisma.telegramLink.findUnique({ where: { userId } });
   if (!link) throw new Error("This user hasn't connected a Telegram bot yet.");
@@ -69,9 +140,6 @@ export async function getNewMessages(userId: string): Promise<StoredMessage[]> {
     select: { id: true, role: true, content: true, createdAt: true },
   });
 
-  // Only advance the cursor if we actually returned something — a caller
-  // that polls constantly with nothing new shouldn't cause a churn of
-  // updates to the DB.
   if (rows.length > 0) {
     await prisma.telegramLink.update({
       where: { userId },
@@ -96,5 +164,22 @@ export async function listRecentMessages(userId: string, max?: number): Promise<
 
 export async function clearHistory(userId: string): Promise<{ deleted: number }> {
   const res = await prisma.message.deleteMany({ where: { userId } });
+  await releaseAllStorage(userId);
   return { deleted: res.count };
+}
+
+export async function getStorageStats(userId: string): Promise<{
+  usedBytes: number;
+  limitBytes: number;
+  messageCount: number;
+}> {
+  const [link, count] = await Promise.all([
+    prisma.telegramLink.findUnique({ where: { userId }, select: { storageBytes: true } }),
+    prisma.message.count({ where: { userId } }),
+  ]);
+  return {
+    usedBytes: link?.storageBytes ?? 0,
+    limitBytes: STORAGE_LIMIT_BYTES,
+    messageCount: count,
+  };
 }

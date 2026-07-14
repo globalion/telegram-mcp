@@ -3,13 +3,14 @@
 // The platform is a pure pipe now — no LLM, no auto-reply. Two paths:
 //
 //   1. Slash-commands (/help, /clear, /recent, /usage, /window, /start)
-//      are handled HERE, in-process. We answer them ourselves so the user
-//      gets a useful bot even before they've connected an agent.
+//      are handled HERE, in-process. So the bot is useful even before
+//      the user's agent is online.
 //
-//   2. Plain text messages are just STORED. The user's agent pulls them
-//      via the MCP tool get_new_messages and decides what to do.
+//   2. Plain text messages are STORED. The user's agent pulls them via
+//      the MCP get_new_messages tool.
 //
-// Telegram retries webhooks that take >20s, so we ack immediately.
+// Storage cap (10 MB) is enforced at storeInboundMessage — over quota
+// bounces back a Telegram notice instead of storing.
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
@@ -19,6 +20,9 @@ import {
   storePlatformReply,
   clearHistory,
   listRecentMessages,
+  getStorageStats,
+  STORAGE_LIMIT_BYTES,
+  STORAGE_WARN_BYTES,
 } from "@/lib/messaging";
 
 export const runtime = "nodejs";
@@ -46,7 +50,6 @@ export async function POST(
 
   const text = msg.text.trim();
 
-  // Slash-commands: platform-handled, never surfaced to the agent.
   if (text.startsWith("/")) {
     const [cmd, ...args] = text.split(/\s+/);
     handleCommand(link.userId, link.botToken, chatId, cmd, args).catch((err) =>
@@ -57,8 +60,23 @@ export async function POST(
     return NextResponse.json({ ok: true });
   }
 
-  // Plain message: store for the agent to pull. No reply from us.
-  storeInboundMessage(link.userId, text).catch(() => undefined);
+  // Plain message: try to store; if quota exceeded, tell the user.
+  storeInboundMessage(link.userId, text)
+    .then(async (result) => {
+      if (!result.ok) {
+        await sendMessage(link.botToken, chatId, `⛔ ${result.reason}`).catch(() => undefined);
+        return;
+      }
+      if (result.warn) {
+        await sendMessage(
+          link.botToken,
+          chatId,
+          `⚠ You're using over ${(STORAGE_WARN_BYTES / 1024 / 1024).toFixed(0)} MB of storage. New content is blocked at ${(STORAGE_LIMIT_BYTES / 1024 / 1024).toFixed(0)} MB. Run /clear to free space.`,
+        ).catch(() => undefined);
+      }
+    })
+    .catch(() => undefined);
+
   return NextResponse.json({ ok: true });
 }
 
@@ -71,7 +89,7 @@ const HELP_TEXT = [
   "`/help` — this message",
   "`/recent [N]` — show the last N messages (default = your window size)",
   "`/clear` — wipe stored conversation history",
-  "`/usage` — show your request + storage usage (coming soon)",
+  "`/usage` — show storage + message counts",
   "`/window N` — set the history window size (default 20)",
   "",
   "Anything not starting with `/` is queued for your agent. If nothing replies, your agent probably isn't running.",
@@ -102,7 +120,7 @@ async function handleCommand(
     }
     case "/clear": {
       const { deleted } = await clearHistory(userId);
-      const reply = `Cleared ${deleted} messages from history.`;
+      const reply = `Cleared ${deleted} messages from history. Storage reset.`;
       await sendMessage(botToken, chatId, reply);
       return;
     }
@@ -136,13 +154,13 @@ async function handleCommand(
       return;
     }
     case "/usage": {
-      const count = await prisma.message.count({ where: { userId } });
-      // Storage metering + rate-limit numbers land in a later phase — for
-      // now just report the message count so /usage does something.
+      const s = await getStorageStats(userId);
+      const usedMb = (s.usedBytes / 1024 / 1024).toFixed(2);
+      const limitMb = (s.limitBytes / 1024 / 1024).toFixed(0);
       await sendMessage(
         botToken,
         chatId,
-        `You have *${count}* stored messages. Storage & request metering coming soon.`,
+        `*Storage:* ${usedMb} / ${limitMb} MB\n*Messages stored:* ${s.messageCount}\n\nRun /clear to free everything.`,
       );
       return;
     }
