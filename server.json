@@ -1,13 +1,13 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.globalion/telegram-mcp",
-  "description": "Turn any Telegram bot into a chat-first AI assistant. Sign in with Google, paste your BotFather token, message your bot. MCP tools let other agents push notifications and read your history.",
+  "description": "Telegram bridge for your MCP-compatible agent. Bidirectional, no LLM in our stack.",
   "status": "active",
   "repository": {
     "url": "https://github.com/globalion/telegram-mcp",
     "source": "github"
   },
-  "version": "0.1.0",
+  "version": "0.2.0",
   "remotes": [
     {
       "type": "streamable-http",

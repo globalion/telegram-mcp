@@ -58,6 +58,24 @@ export async function deleteWebhook(botToken: string): Promise<void> {
   await call(botToken, "deleteWebhook", { drop_pending_updates: true });
 }
 
+/**
+ * Register the slash-command menu the user sees when they type "/" in a chat
+ * with their bot. Called after linking so the user's Telegram surfaces our
+ * platform-handled commands (see webhook route for what each does).
+ */
+export async function setBotCommands(botToken: string): Promise<void> {
+  await call(botToken, "setMyCommands", {
+    commands: [
+      { command: "start", description: "Connect your Telegram chat" },
+      { command: "help", description: "Show what this bot can do" },
+      { command: "recent", description: "Show recent messages: /recent [N]" },
+      { command: "clear", description: "Wipe stored conversation history" },
+      { command: "usage", description: "Show request + storage usage" },
+      { command: "window", description: "Set history window size: /window N" },
+    ],
+  });
+}
+
 // Subset of the Telegram Update payload we care about.
 export interface TelegramMessage {
   message_id: number;

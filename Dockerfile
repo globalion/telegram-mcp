@@ -32,4 +32,4 @@ COPY --from=builder /app/package.json ./
 ENV HOME=/home/nextjs
 USER nextjs
 EXPOSE 3000
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+CMD ["sh", "-c", "npx --yes prisma@6.19.2 migrate deploy && node server.js"]

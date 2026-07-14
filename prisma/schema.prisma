@@ -8,8 +8,8 @@ datasource db {
 }
 
 // --- NextAuth models ---
-// Google sign-in only, JWT sessions. We don't request Gmail or any other
-// scope — the Google account is purely identity.
+// Google sign-in is only the ban anchor / API-key-issuing gate. Per-message
+// identity comes from the API key + chatId, never the login session.
 
 model User {
   id            String    @id @default(cuid())
@@ -79,9 +79,11 @@ model ApiKey {
 }
 
 // --- Telegram link ---
-// One row per user who's connected a bot. `webhookSecret` is a per-user
-// random URL segment so a leaked bot token can't be pointed at someone
-// else's account. `chatId` is filled the first time the user DMs their bot.
+// One row per user who's connected a bot. webhookSecret is a per-user
+// random URL segment. chatId is filled the first time the user DMs /start.
+// lastPulledAt is the cursor for get_new_messages — messages with role=user
+// created after this timestamp are "unread". windowSize governs how many
+// messages /recent and list_recent_messages surface by default.
 
 model TelegramLink {
   id            String   @id @default(cuid())
@@ -90,6 +92,8 @@ model TelegramLink {
   botUsername   String?
   webhookSecret String   @unique
   chatId        String?
+  lastPulledAt  DateTime @default(now())
+  windowSize    Int      @default(20)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -99,11 +103,11 @@ model TelegramLink {
 }
 
 // --- Conversation history ---
-// Every message in and out of every user's bot is logged here so:
-//   (a) the LLM has memory across turns,
-//   (b) MCP clients can list_recent_messages,
-//   (c) the user can review what their bot has said.
-// `role` follows the OpenAI convention: "user" | "assistant" | "system".
+// Every message in and out is logged. "role" follows OpenAI convention:
+//   "user"      — inbound from the human on Telegram
+//   "assistant" — outbound to Telegram (either from the agent via
+//                 send_telegram_message, or from the platform itself
+//                 replying to a slash-command).
 
 model Message {
   id        String   @id @default(cuid())

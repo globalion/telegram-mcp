@@ -1,13 +1,14 @@
 // POST /api/telegram/link { botToken } — user posts their BotFather token
-// from the dashboard. We validate it, save the row, and register the
-// webhook with Telegram so future messages route back to us.
+// from the dashboard. We validate it, save the row, register the webhook,
+// AND install the slash-command menu (setMyCommands) so the "/" popup on
+// Telegram lists everything our webhook handles.
 // DELETE /api/telegram/link — remove the link (deletes webhook on Telegram).
 
 import { NextResponse } from "next/server";
 import { randomBytes } from "node:crypto";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { getBotInfo, setWebhook, deleteWebhook } from "@/lib/telegram";
+import { getBotInfo, setWebhook, deleteWebhook, setBotCommands } from "@/lib/telegram";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }
 
-  // If the user is swapping bots, kill the old webhook before writing new state.
+  // If the user is swapping bots, kill the old webhook first.
   const existing = await prisma.telegramLink.findUnique({ where: { userId: session.user.id } });
   if (existing) {
     await deleteWebhook(existing.botToken).catch(() => undefined);
@@ -44,6 +45,9 @@ export async function POST(req: Request) {
 
   try {
     await setWebhook(botToken, webhookUrl);
+    // Register the command menu — fire-and-forget so a failure here doesn't
+    // block the user from linking. The bot still works without a menu.
+    setBotCommands(botToken).catch(() => undefined);
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }

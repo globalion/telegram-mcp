@@ -1,8 +1,8 @@
 {
   "name": "telegram-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": false,
-  "description": "Turn any Telegram bot into a chat-first AI assistant. Sign in with Google, paste your BotFather token, message your bot. MCP tools let other agents push notifications and read your history.",
+  "description": "Telegram bridge for your MCP-compatible agent. No LLM in the loop — we just move messages between Telegram and your agent (Claude Desktop, Cursor, custom scripts).",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,10 +16,8 @@
     "prisma": "prisma"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^3.0.0",
     "@auth/prisma-adapter": "^2.11.1",
-    "@prisma/client": "^6.19.2",
-    "ai": "^5.1.0",
+    "@prisma/client": "6.19.2",
     "next": "16.1.6",
     "next-auth": "^5.0.0-beta.30",
     "react": "19.2.3",
@@ -33,7 +31,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "prisma": "^6.19.2",
+    "prisma": "6.19.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

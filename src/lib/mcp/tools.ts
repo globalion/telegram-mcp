@@ -1,17 +1,23 @@
-// MCP tools exposed by /api/mcp. Purpose: let OTHER agents (Claude Desktop,
-// Cursor, custom agents) push notifications into the user's own Telegram
-// bot, and read the user's conversation history from it.
+// MCP tools exposed by /api/mcp.
 //
-// The main "chat with an AI over Telegram" feature does not need any MCP
-// call from the user's side — messaging the bot from Telegram just works.
+// The platform is a bridge, not a brain. Every tool is transport/storage
+// only — no inference happens on our side. Your agent (Claude Desktop,
+// Cursor, a custom script) does the thinking and calls these to move
+// messages back and forth.
 
 import { z } from "zod";
 
 export const TOOL_DEFINITIONS = [
   {
+    name: "get_new_messages",
+    description:
+      "Return inbound Telegram messages from the user that have arrived since the last time this tool was called (read-once). Poll this from your agent's loop — messages that come in while your agent is offline queue up here.",
+    inputSchema: z.object({}),
+  },
+  {
     name: "send_telegram_message",
     description:
-      "Send a message from your agent to the user via their Telegram bot. The user must have connected their bot and sent /start at least once. Use this to notify the user about something asynchronous — a job finishing, a scheduled reminder, a monitoring alert.",
+      "Deliver a message from your agent to the user's Telegram bot. Use for replies, reminders, notifications, or async 'job done' pings. The user must have connected their bot and sent /start at least once.",
     inputSchema: z.object({
       text: z.string().min(1).max(4000).describe("Message body. Markdown is supported."),
     }),
@@ -19,10 +25,16 @@ export const TOOL_DEFINITIONS = [
   {
     name: "list_recent_messages",
     description:
-      "Return the N most recent messages in the user's Telegram conversation (both directions). Useful when an agent wants to catch up on prior context before replying.",
+      "Return the last N stored messages in the user's conversation (both directions, without advancing the read cursor). Useful when your agent wants context before deciding how to reply.",
     inputSchema: z.object({
       max: z.number().int().min(1).max(200).default(20),
     }),
+  },
+  {
+    name: "clear_history",
+    description:
+      "Wipe every stored message for the user. Use when the user explicitly asks to reset, or when starting a fresh session.",
+    inputSchema: z.object({}),
   },
 ] as const;
 

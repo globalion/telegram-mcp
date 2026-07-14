@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "telegram-mcp — Turn any Telegram bot into an AI assistant",
+  title: "telegram-mcp — Telegram bridge for your MCP agent",
   description:
-    "Sign in with Google, paste your BotFather token, and message your own Telegram bot to chat with an AI assistant. MCP tools let other agents push notifications to your bot.",
+    "Bidirectional Telegram ⇆ agent bridge with no LLM in our stack. Your agent (Claude Desktop, Cursor, custom script) does the thinking; we move messages and store history.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

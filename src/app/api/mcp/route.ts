@@ -1,11 +1,17 @@
-// MCP-over-HTTP endpoint. JSON-RPC 2.0. Same protocol shape as
-// video-render-mcp so any MCP client that works with those works here.
+// MCP-over-HTTP endpoint. JSON-RPC 2.0. Auth: Bearer <apiKey>.
 //
-// Auth: Bearer <apiKey> in the Authorization header.
+// This is the agent's side of the bridge: get_new_messages pulls inbound,
+// send_telegram_message pushes outbound, list_recent_messages reads history
+// for context, clear_history wipes the log.
 
 import { NextResponse } from "next/server";
 import { findLiveKey } from "@/lib/keys";
-import { pushAssistantMessage, listRecentMessages } from "@/lib/chat";
+import {
+  pushAssistantMessage,
+  getNewMessages,
+  listRecentMessages,
+  clearHistory,
+} from "@/lib/messaging";
 import {
   TOOL_DEFINITIONS,
   findTool,
@@ -17,7 +23,7 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const PROTOCOL_VERSION = "2025-06-18";
-const SERVER_INFO = { name: "telegram-mcp", version: "0.1.0" };
+const SERVER_INFO = { name: "telegram-mcp", version: "0.2.0" };
 
 export async function POST(req: Request) {
   const rpc = await req.json().catch(() => null);
@@ -58,7 +64,7 @@ export async function POST(req: Request) {
       const tool = findTool(name);
       if (!tool) return jsonRpcError(rpc.id, -32601, `Unknown tool: ${name}`);
 
-      const parsed = tool.inputSchema.safeParse(args);
+      const parsed = tool.inputSchema.safeParse(args ?? {});
       if (!parsed.success) {
         return jsonRpcError(
           rpc.id,
@@ -92,11 +98,17 @@ export async function POST(req: Request) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function runTool(name: ToolName, args: any, userId: string) {
   switch (name) {
+    case "get_new_messages": {
+      const messages = await getNewMessages(userId);
+      return { messages, count: messages.length };
+    }
     case "send_telegram_message":
       await pushAssistantMessage(userId, args.text);
       return { ok: true };
     case "list_recent_messages":
       return listRecentMessages(userId, args.max);
+    case "clear_history":
+      return clearHistory(userId);
   }
 }
 

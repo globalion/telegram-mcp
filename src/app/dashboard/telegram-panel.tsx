@@ -56,10 +56,9 @@ export function TelegramPanel({
         </div>
         <p className="mb-4 text-sm text-neutral-400">
           Open your bot on Telegram, send{" "}
-          <code className="rounded bg-black/40 px-1.5 py-0.5">/start</code>, then
-          message it in plain English. Use{" "}
-          <code className="rounded bg-black/40 px-1.5 py-0.5">/reset</code> to
-          clear conversation history.
+          <code className="rounded bg-black/40 px-1.5 py-0.5">/start</code>. Messages you send are queued for your agent to pull via{" "}
+          <code className="rounded bg-black/40 px-1.5 py-0.5">get_new_messages</code>. Type{" "}
+          <code className="rounded bg-black/40 px-1.5 py-0.5">/help</code> in the bot for the full slash-command list.
         </p>
         <button
           onClick={disconnect}

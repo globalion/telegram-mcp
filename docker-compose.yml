@@ -32,6 +32,9 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql://admin:admin@db:5432/telegram_mcp
+    # Host port 3012 is what cloudflared reaches us on
+    # (via http://172.17.0.1:3012 in the tunnel config, matching the same
+    # pattern video-render-mcp uses).
     ports:
       - "3012:3000"
     depends_on:
