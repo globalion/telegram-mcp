@@ -11,6 +11,7 @@
 
 import { prisma } from "./db";
 import { sendMessage } from "./telegram";
+import { isAdminUser } from "./admin";
 
 export interface StoredMessage {
   id: string;
@@ -39,6 +40,15 @@ async function reserveStorage(
 ): Promise<{ ok: true; warn: boolean } | { ok: false; used: number }> {
   const link = await prisma.telegramLink.findUnique({ where: { userId } });
   if (!link) return { ok: false, used: 0 };
+  // Admins get unlimited storage — still track usage for observability, but
+  // never reject and never warn.
+  if (await isAdminUser(userId)) {
+    await prisma.telegramLink.update({
+      where: { id: link.id },
+      data: { storageBytes: link.storageBytes + bytes },
+    });
+    return { ok: true, warn: false };
+  }
   const newTotal = link.storageBytes + bytes;
   if (newTotal > STORAGE_LIMIT_BYTES) {
     return { ok: false, used: link.storageBytes };
