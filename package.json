@@ -1,6 +1,6 @@
 {
   "name": "telegram-mcp",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "private": false,
   "description": "Telegram bridge for your MCP-compatible agent. No LLM in the loop — we just move messages between Telegram and your agent (Claude Desktop, Cursor, custom scripts).",
   "license": "MIT",
