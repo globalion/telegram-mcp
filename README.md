@@ -40,7 +40,7 @@ Hosted at **[telegram.regiq.in](https://telegram.regiq.in)** or self-host with t
 
 Now your agent can call `get_new_messages` to see what you sent it, and `send_telegram_message` to reply.
 
-## MCP tools
+## Tools
 
 | Tool | Direction | Notes |
 |------|-----------|-------|
