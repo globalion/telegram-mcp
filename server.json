@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.globalion/telegram-mcp",
+  "name": "io.github.Shreyas-Profile/telegram-mcp",
   "description": "Telegram bridge for your MCP-compatible agent. Bidirectional, no LLM in our stack.",
   "status": "active",
   "repository": {
