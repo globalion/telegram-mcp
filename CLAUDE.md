@@ -39,8 +39,6 @@ ssh root@89.167.56.16 "cd /opt/telegram-mcp && docker compose up -d --build"
 
 Populated on the server via `/opt/telegram-mcp/.env` (NOT committed to git). Values live in `shreyas-onboarding.md` for shared secrets, per-app secrets are generated fresh:
 
-- `OPENROUTER_API_KEY` — shared Globalion OpenRouter key
-- `OPENROUTER_MODEL` — pick any OpenRouter model id (default `anthropic/claude-sonnet-5`)
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — created per-MCP in Google Cloud Console
 - `NEXTAUTH_SECRET` — `openssl rand -base64 32`
 - `PUBLIC_BASE_URL=https://telegram.regiq.in`
@@ -56,7 +54,7 @@ ssh root@89.167.56.16 "docker logs telegram-mcp-web --tail 60"
 
 ## Rules (from shreyas-onboarding.md §7)
 
-- ✅ All LLM calls via OpenRouter — never call Anthropic/OpenAI/Google APIs directly.
+- ✅ **No LLM in this stack.** telegram-mcp is a pure transport bridge — the user's agent supplies the model. If a future feature needs inference, route via OpenRouter with the shared Globalion key, never vendor APIs direct.
 - ✅ Expose `/api/admin/health` (already wired at `src/app/api/admin/health/route.ts`).
 - ✅ Container names prefixed with `telegram-mcp-` and unique across the fleet.
 - ✅ Container-internal port is any port (3000 here); Cloudflare tunnel handles external HTTPS.
