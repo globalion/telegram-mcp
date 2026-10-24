@@ -1,0 +1,38 @@
+{
+  "name": "telegram-mcp",
+  "version": "0.2.0",
+  "private": false,
+  "description": "Telegram bridge for your MCP-compatible agent. No LLM in the loop — we just move messages between Telegram and your agent (Claude Desktop, Cursor, custom scripts).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/globalion/telegram-mcp"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start -p 3000",
+    "lint": "eslint",
+    "prisma": "prisma"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.11.1",
+    "@prisma/client": "6.19.2",
+    "next": "16.1.6",
+    "next-auth": "^5.0.0-beta.30",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.1.6",
+    "prisma": "6.19.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

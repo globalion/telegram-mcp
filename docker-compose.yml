@@ -1,0 +1,56 @@
+# telegram-mcp deployment stack.
+#
+# Container names are prefixed with `telegram-mcp-` per Globalion's shared-
+# server rule (unique container name per MCP). Host port 3012 is the internal
+# fallback for direct debugging — external traffic reaches this via the
+# Cloudflare tunnel pointing at http://172.17.0.1:3012 on the shared platform
+# network (see the tunnel's config.yml on the Hetzner box).
+#
+# agent-runner is a sidecar that polls the MCP endpoint on Shreyas's behalf
+# and pushes LLM replies back to his Telegram. Anyone else self-hosting can
+# remove that service — the bridge itself has no LLM.
+
+services:
+  db:
+    container_name: telegram-mcp-db
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 114c59af3ae8985d98a19d2d62c4f15d3e3ef534b8cd2bc0
+      POSTGRES_DB: telegram_mcp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d telegram_mcp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    container_name: telegram-mcp-web
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://admin:114c59af3ae8985d98a19d2d62c4f15d3e3ef534b8cd2bc0@db:5432/telegram_mcp
+    ports:
+      - "3012:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  agent-runner:
+    container_name: telegram-mcp-agent-runner
+    build:
+      context: ./agent-runner
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env.agent-runner
+    depends_on:
+      - web
+
+volumes:
+  pgdata:
